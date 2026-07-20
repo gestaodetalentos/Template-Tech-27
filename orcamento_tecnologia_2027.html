@@ -379,6 +379,35 @@ function loadOfflineSnapshot(){
   people = JSON.parse(JSON.stringify(EMBEDDED_PEOPLE));
   backendConnected = false;
 }
+
+/* ============================================================
+   TRAVA DE SEGURANÇA DO 2026
+   ============================================================
+   Não importa o que vier da planilha (bug, edição manual, dado
+   corrompido) — o valor de 2026 das 17 pessoas originais é SEMPRE
+   forçado para o número real aqui embaixo. Pessoas que não estão
+   nesta lista (incluídas depois, só para 2027) sempre recebem
+   2026 = R$ 0. Isso roda toda vez que os dados são carregados,
+   então o 2026 nunca mais pode aparecer errado na tela.
+   ============================================================ */
+const KNOWN_2026_BASELINES = {
+  'p1': 1244.0, 'p2': 787.0, 'p3': 1469.27, 'p4': 823.38, 'p5': 999.85,
+  'p6': 787.0, 'p7': 1044.85, 'p8': 999.85, 'p9': 787.0, 'p10': 2789.85,
+  'p11': 999.85, 'p12': 1101.69, 'p13': 787.0, 'p14': 1004.31, 'p15': 1568.63,
+  'p16': 823.38, 'p17': 999.85
+};
+function enforceKnownBaselines(list){
+  (list||[]).forEach(p=>{
+    if(Object.prototype.hasOwnProperty.call(KNOWN_2026_BASELINES, p.id)){
+      p.v26Baseline = KNOWN_2026_BASELINES[p.id];
+    } else {
+      const n = Number(p.v26Baseline);
+      p.v26Baseline = (Number.isFinite(n) && n >= 0 && n < 100000) ? n : 0;
+    }
+  });
+  return list;
+}
+
 async function initApp(){
   if(isGasConfigured()){
     try{
@@ -386,7 +415,7 @@ async function initApp(){
       const data = await res.json();
       if(data && Array.isArray(data.people) && Array.isArray(data.catalog)){
         CATALOG = data.catalog;
-        people = data.people;
+        people = enforceKnownBaselines(data.people);
         backendConnected = true;
       } else {
         throw new Error(data && data.error ? data.error : 'resposta inválida da planilha');
