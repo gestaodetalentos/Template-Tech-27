@@ -986,20 +986,38 @@ function exportExcel(){
   try{
     const wb = XLSX.utils.book_new();
     const rows = [];
+    let itemCounter = 1;
     people.forEach(p=>{
       if(p.itens.length===0){
-        rows.push({"Área":p.area,"Nome":p.nome,"Cargo":p.cargo||'',"Email":p.email||'',"Categoria":"","Ferramenta/Item":"","Valor 2026":0,"Valor 2027":0});
+        rows.push({
+          "Item": itemCounter++, "Status":"", "Indicador":"", "Login": p.login||'', "Nome": p.nome,
+          "Identificação":"", "Licença":"", "Perfil":"", "Centro de Custos": p.area,
+          "Custo 2026": 0, "Custo 2027": 0, "Observação":"", "Data de Envio":"", "Responsável Excel":""
+        });
         return;
       }
       p.itens.forEach(it=>{
         const c = catById(it.catId);
-        rows.push({"Área":p.area,"Nome":p.nome,"Cargo":p.cargo||'',"Email":p.email||'',
-          "Categoria": c? c.indicador : (it.label||''), "Ferramenta/Item": c? c.label : (it.label||''),
-          "Valor 2026 (ref. da ferramenta atual)": c? c.v26 : 0, "Valor 2027": c? c.v27 : 0});
+        rows.push({
+          "Item": itemCounter++,
+          "Status": "",
+          "Indicador": c? c.indicador : (it.label||''),
+          "Login": p.login||'',
+          "Nome": p.nome,
+          "Identificação": "",
+          "Licença": c? c.label : (it.label||''),
+          "Perfil": c? (c.perfil||'') : '',
+          "Centro de Custos": p.area,
+          "Custo 2026": c? c.v26 : 0,
+          "Custo 2027": c? c.v27 : 0,
+          "Observação": "",
+          "Data de Envio": "",
+          "Responsável Excel": ""
+        });
       });
     });
     const ws1 = XLSX.utils.json_to_sheet(rows);
-    ws1['!cols'] = [{wch:26},{wch:26},{wch:26},{wch:26},{wch:20},{wch:38},{wch:12},{wch:12}];
+    ws1['!cols'] = [{wch:6},{wch:14},{wch:18},{wch:16},{wch:26},{wch:16},{wch:38},{wch:20},{wch:26},{wch:12},{wch:12},{wch:22},{wch:14},{wch:18}];
     XLSX.utils.book_append_sheet(wb, ws1, "Cenário 2027");
 
     const resumoPessoa = people.map(p=>{
