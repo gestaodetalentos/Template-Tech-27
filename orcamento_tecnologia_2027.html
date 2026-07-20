@@ -982,6 +982,73 @@ function showToast(msg){
    EXPORTAÇÃO EXCEL
    ============================================================ */
 function round2(n){ return Math.round((n||0)*100)/100; }
+/* ============================================================
+   COMPARATIVO — o que foi incluído e o que foi excluído desde o
+   cenário original de 2026 (EMBEDDED_PEOPLE é sempre o retrato
+   real de 2026, não muda nunca). Uma troca de ferramenta conta
+   como uma exclusão da antiga + inclusão da nova.
+   ============================================================ */
+function computeAddedRemoved(){
+  const baselineById = {};
+  EMBEDDED_PEOPLE.forEach(p=> baselineById[p.id] = p);
+
+  const added = [];
+  const removed = [];
+  const loginFor = p => p.login || (baselineById[p.id] && baselineById[p.id].login) || '';
+
+  people.forEach(p=>{
+    const bp = baselineById[p.id];
+    if(!bp){
+      // pessoa inteiramente nova: todos os itens dela são inclusão
+      p.itens.forEach(it=>{
+        const c = catById(it.catId);
+        added.push({area:p.area, nome:p.nome, cargo:p.cargo||'', login:loginFor(p),
+          indicador:c?c.indicador:'', label:c?c.label:(it.label||''), perfil:c?(c.perfil||''):''});
+      });
+      return;
+    }
+    const baseCatById = {};
+    bp.itens.forEach(it=> baseCatById[it.id] = it.catId);
+    const curIds = new Set(p.itens.map(it=>it.id));
+
+    p.itens.forEach(it=>{
+      const baseCatId = baseCatById[it.id];
+      if(baseCatId === undefined){
+        const c = catById(it.catId);
+        added.push({area:p.area, nome:p.nome, cargo:p.cargo||'', login:loginFor(p),
+          indicador:c?c.indicador:'', label:c?c.label:(it.label||''), perfil:c?(c.perfil||''):''});
+      } else if(baseCatId !== it.catId){
+        const cOld = catById(baseCatId), cNew = catById(it.catId);
+        removed.push({area:p.area, nome:p.nome, login:loginFor(p),
+          indicador:cOld?cOld.indicador:'', label:cOld?cOld.label:'', perfil:cOld?(cOld.perfil||''):''});
+        added.push({area:p.area, nome:p.nome, cargo:p.cargo||'', login:loginFor(p),
+          indicador:cNew?cNew.indicador:'', label:cNew?cNew.label:'', perfil:cNew?(cNew.perfil||''):''});
+      }
+    });
+
+    bp.itens.forEach(it=>{
+      if(!curIds.has(it.id)){
+        const c = catById(it.catId);
+        removed.push({area:bp.area, nome:bp.nome, login:loginFor(bp),
+          indicador:c?c.indicador:'', label:c?c.label:'', perfil:c?(c.perfil||''):''});
+      }
+    });
+  });
+
+  const currentIds = new Set(people.map(p=>p.id));
+  EMBEDDED_PEOPLE.forEach(bp=>{
+    if(!currentIds.has(bp.id)){
+      bp.itens.forEach(it=>{
+        const c = catById(it.catId);
+        removed.push({area:bp.area, nome:bp.nome, login:loginFor(bp),
+          indicador:c?c.indicador:'', label:c?c.label:'', perfil:c?(c.perfil||''):''});
+      });
+    }
+  });
+
+  return {added, removed};
+}
+
 function exportExcel(){
   try{
     const wb = XLSX.utils.book_new();
@@ -1018,7 +1085,28 @@ function exportExcel(){
     });
     const ws1 = XLSX.utils.json_to_sheet(rows);
     ws1['!cols'] = [{wch:6},{wch:14},{wch:18},{wch:16},{wch:26},{wch:16},{wch:38},{wch:20},{wch:26},{wch:12},{wch:12},{wch:22},{wch:14},{wch:18}];
-    XLSX.utils.book_append_sheet(wb, ws1, "Cenário 2027");
+    XLSX.utils.book_append_sheet(wb, ws1, "Base 2027");
+
+    const diff = computeAddedRemoved();
+    let addCounter = 1;
+    const addedRows = diff.added.map(a=>({
+      "Item": addCounter++, "Status":"", "Motivo Inclusão":"", "Indicador":a.indicador, "Nome":a.nome,
+      "Cargo":a.cargo, "Centro de Custos":a.area, "Licença":a.label, "Perfil":a.perfil,
+      "Identificação":"", "Observação":"", "Data Inclusão":"", "Responsável Excel":""
+    }));
+    const ws2add = XLSX.utils.json_to_sheet(addedRows.length?addedRows:[{"Item":"","Status":"","Motivo Inclusão":"","Indicador":"","Nome":"(nenhuma inclusão em relação a 2026)","Cargo":"","Centro de Custos":"","Licença":"","Perfil":"","Identificação":"","Observação":"","Data Inclusão":"","Responsável Excel":""}]);
+    ws2add['!cols'] = [{wch:6},{wch:14},{wch:20},{wch:18},{wch:26},{wch:22},{wch:26},{wch:38},{wch:20},{wch:16},{wch:22},{wch:14},{wch:18}];
+    XLSX.utils.book_append_sheet(wb, ws2add, "Adicionados");
+
+    let remCounter = 1;
+    const removedRows = diff.removed.map(r=>({
+      "Item": remCounter++, "Status":"", "Indicador":r.indicador, "Login":r.login, "Nome":r.nome,
+      "Centro de Custos":r.area, "Licença":r.label, "Perfil":r.perfil, "Identificação":"",
+      "Motivo Exclusão":"", "Chamado Globoservice":"", "Observação":"", "Data Exclusão":"", "Responsável Excel":""
+    }));
+    const ws3rem = XLSX.utils.json_to_sheet(removedRows.length?removedRows:[{"Item":"","Status":"","Indicador":"","Login":"","Nome":"(nenhuma exclusão em relação a 2026)","Centro de Custos":"","Licença":"","Perfil":"","Identificação":"","Motivo Exclusão":"","Chamado Globoservice":"","Observação":"","Data Exclusão":"","Responsável Excel":""}]);
+    ws3rem['!cols'] = [{wch:6},{wch:14},{wch:18},{wch:16},{wch:26},{wch:26},{wch:38},{wch:20},{wch:16},{wch:18},{wch:20},{wch:22},{wch:14},{wch:18}];
+    XLSX.utils.book_append_sheet(wb, ws3rem, "Exclusão");
 
     const resumoPessoa = people.map(p=>{
       const t = personTotals(p);
